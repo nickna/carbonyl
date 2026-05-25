@@ -8,10 +8,10 @@ proprietary_codecs = true
 # Disable unused dependencies
 ozone_platform = "headless"
 ozone_platform_x11 = false
+ozone_platform_wayland = false
 
 use_static_angle = true
 
-use_qt = false
 use_gio = false
 use_gtk = false
 use_cups = false
@@ -19,7 +19,6 @@ use_dbus = false
 use_glib = false
 use_libpci = false
 use_kerberos = false
-use_vaapi_x11 = false
 use_xkbcommon = false
 
 angle_use_x11 = false
@@ -35,20 +34,12 @@ rtc_use_x11_extensions = false
 # use_system_minigbm = false
 
 # Disable unused features
-enable_extensions = false
-enable_background_mode = false
-enable_pdf = false
-enable_nacl = false
-enable_ppapi = false
-enable_printing = false
-enable_print_content_analysis = false
-enable_plugins = false
-enable_rust_json = false
-enable_tagged_pdf = false
+# Note: enable_extensions, enable_pdf, enable_background_mode and
+# enable_screen_ai_service are intentionally left at their defaults (true on
+# Linux) because M148's chrome/test, chrome/browser/* and chrome/utility/*
+# BUILD.gn files reference each other unconditionally and assert these flags
+# at GN parse time. Since we only build //headless:headless_shell, the
+# corresponding code is not linked into the final binary.
 enable_media_remoting = false
-enable_speech_service = false
-enable_component_updater = false
-enable_screen_ai_service = false
-enable_system_notifications = false
 enable_browser_speech_service = false
 enable_webui_certificate_viewer = false
