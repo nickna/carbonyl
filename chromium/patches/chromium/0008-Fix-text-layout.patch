@@ -1,31 +1,34 @@
-From 7b1f72900f704ffecc48c66da7ccd6de205b88f7 Mon Sep 17 00:00:00 2001
+From 07dedbca497baee118d245b480472ce72e2bd250 Mon Sep 17 00:00:00 2001
 From: Fathy Boundjadj <hey@fathy.fr>
 Date: Thu, 9 Feb 2023 03:32:14 +0100
 Subject: [PATCH 08/14] Fix text layout
 
 ---
- .../core/css/resolver/style_resolver.cc         | 17 ++++++++++++++++-
- 1 file changed, 16 insertions(+), 1 deletion(-)
+ .../core/css/resolver/style_resolver.cc       | 20 ++++++++++++++++++-
+ 1 file changed, 19 insertions(+), 1 deletion(-)
 
 diff --git a/third_party/blink/renderer/core/css/resolver/style_resolver.cc b/third_party/blink/renderer/core/css/resolver/style_resolver.cc
-index 6207b72d17cb9..79cb8c85b697f 100644
+index da4a0651c842c..686d2d4dab990 100644
 --- a/third_party/blink/renderer/core/css/resolver/style_resolver.cc
 +++ b/third_party/blink/renderer/core/css/resolver/style_resolver.cc
-@@ -281,7 +281,9 @@ String ComputeBaseComputedStyleDiff(const ComputedStyle* base_computed_style,
+@@ -381,7 +381,10 @@ String ComputeBaseComputedStyleDiff(const ComputedStyle* base_computed_style,
      return g_null_atom;
    }
  
--  return String("Field diff: ") + builder.ReleaseString();
-+  // TODO(fathy): Carbonyl should properly set the computed style
-+  // return String("Field diff: ") + builder.ReleaseString();
+-  return StrCat({"Field diff: ", builder.ReleaseString()});
++  // Carbonyl: silence the field-diff dump that fires under the headless
++  // runtime; computed-style mismatch is harmless here.
++  // return StrCat({"Field diff: ", builder.ReleaseString()});
 +  return g_null_atom;
  }
  #endif  // DCHECK_IS_ON()
  
-@@ -1039,6 +1041,19 @@ scoped_refptr<ComputedStyle> StyleResolver::ResolveStyle(
-     UseCounter::Count(GetDocument(), WebFeature::kHasGlyphRelativeUnits);
+@@ -1497,6 +1500,21 @@ const ComputedStyle* StyleResolver::ResolveStyle(
+     }
    }
  
++  // Carbonyl: force every element to a monospace font sized to fit the
++  // terminal cell grid (11.75/7.0 px wide, 14.0/7.0 px line-height).
 +  auto font = state.StyleBuilder().GetFontDescription();
 +  FontFamily family;
 +

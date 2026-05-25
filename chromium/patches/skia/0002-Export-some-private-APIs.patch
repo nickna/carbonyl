@@ -1,22 +1,22 @@
-From a271b203a2b60f0cd450bda0fa2cc14885f1d9a8 Mon Sep 17 00:00:00 2001
+From e631b7ec72f177800fe9abe8dadfca8ed93e2eac Mon Sep 17 00:00:00 2001
 From: Fathy Boundjadj <hey@fathy.fr>
 Date: Thu, 9 Feb 2023 03:38:05 +0100
 Subject: [PATCH 2/2] Export some private APIs
 
 Temporary until TextCaptureDevice moves here
 ---
- include/utils/SkBase64.h     | 2 +-
+ src/base/SkBase64.h          | 2 +-
  src/core/SkClipStack.h       | 2 +-
  src/core/SkClipStackDevice.h | 2 +-
  src/core/SkDevice.h          | 2 +-
  src/core/SkFontPriv.h        | 2 +-
  5 files changed, 5 insertions(+), 5 deletions(-)
 
-diff --git a/include/utils/SkBase64.h b/include/utils/SkBase64.h
-index e01028543a..beddbd2c95 100644
---- a/include/utils/SkBase64.h
-+++ b/include/utils/SkBase64.h
-@@ -12,7 +12,7 @@
+diff --git a/src/base/SkBase64.h b/src/base/SkBase64.h
+index e48d861d2d..e5f5f6fcd7 100644
+--- a/src/base/SkBase64.h
++++ b/src/base/SkBase64.h
+@@ -10,7 +10,7 @@
  
  #include <cstddef>
  
@@ -26,10 +26,10 @@ index e01028543a..beddbd2c95 100644
      enum Error {
          kNoError,
 diff --git a/src/core/SkClipStack.h b/src/core/SkClipStack.h
-index c325d2c619..d93b9cf37f 100644
+index 016dc0fb45..d2cf19b428 100644
 --- a/src/core/SkClipStack.h
 +++ b/src/core/SkClipStack.h
-@@ -30,7 +30,7 @@ class GrProxyProvider;
+@@ -30,7 +30,7 @@
  // (i.e., the fSaveCount in force when it was added). Restores are thus
  // implemented by removing clips from fDeque that have an fSaveCount larger
  // then the freshly decremented count.
@@ -39,36 +39,36 @@ index c325d2c619..d93b9cf37f 100644
      enum BoundsType {
          // The bounding box contains all the pixels that can be written to
 diff --git a/src/core/SkClipStackDevice.h b/src/core/SkClipStackDevice.h
-index eff1f1a440..a8d6b4fe07 100644
+index 3f332eb015..118b01332c 100644
 --- a/src/core/SkClipStackDevice.h
 +++ b/src/core/SkClipStackDevice.h
-@@ -11,7 +11,7 @@
- #include "src/core/SkClipStack.h"
- #include "src/core/SkDevice.h"
+@@ -23,7 +23,7 @@ class SkSurfaceProps;
+ enum class SkClipOp;
+ struct SkImageInfo;
  
--class SkClipStackDevice : public SkBaseDevice {
-+class SK_API SkClipStackDevice : public SkBaseDevice {
+-class SkClipStackDevice : public SkDevice {
++class SK_API SkClipStackDevice : public SkDevice {
  public:
      SkClipStackDevice(const SkImageInfo& info, const SkSurfaceProps& props)
-         : SkBaseDevice(info, props)
+         : SkDevice(info, props)
 diff --git a/src/core/SkDevice.h b/src/core/SkDevice.h
-index e0fed94b9b..c7194f9c1c 100644
+index 2ae798c987..81d8f7a80f 100644
 --- a/src/core/SkDevice.h
 +++ b/src/core/SkDevice.h
-@@ -54,7 +54,7 @@ struct SkStrikeDeviceInfo {
-     const sktext::gpu::SDFTControl* const fSDFTControl;
- };
- 
--class SkBaseDevice : public SkRefCnt, public SkMatrixProvider {
-+class SK_API SkBaseDevice : public SkRefCnt, public SkMatrixProvider {
+@@ -104,7 +104,7 @@ struct SkStrikeDeviceInfo {
+  * layer's clip stack starts anew (although the layer's results are then clipped by its parent's
+  * stack when it is restored).
+  */
+-class SkDevice : public SkRefCnt {
++class SK_API SkDevice : public SkRefCnt {
  public:
-     SkBaseDevice(const SkImageInfo&, const SkSurfaceProps&);
+     SkDevice(const SkImageInfo&, const SkSurfaceProps&);
  
 diff --git a/src/core/SkFontPriv.h b/src/core/SkFontPriv.h
-index 95ca905bf1..a31aba8e2b 100644
+index c369533abe..7daa345b51 100644
 --- a/src/core/SkFontPriv.h
 +++ b/src/core/SkFontPriv.h
-@@ -16,7 +16,7 @@
+@@ -17,7 +17,7 @@
  class SkReadBuffer;
  class SkWriteBuffer;
  

@@ -1,4 +1,4 @@
-From 795b29828fd7ac95548c4dcab483cbc3b6c1d361 Mon Sep 17 00:00:00 2001
+From 5708b0d128054220c178abb6fa324a7ffc072135 Mon Sep 17 00:00:00 2001
 From: Fathy Boundjadj <hey@fathy.fr>
 Date: Thu, 9 Feb 2023 03:21:59 +0100
 Subject: [PATCH 02/14] Add Carbonyl service
@@ -12,14 +12,15 @@ Subject: [PATCH 02/14] Add Carbonyl service
  content/renderer/render_frame_impl.cc         | 288 ++++++++++++++++++
  content/renderer/render_frame_impl.h          |   8 +
  .../blink/public/web/web_frame_widget.h       |   7 +
- .../blink/renderer/platform/fonts/font.cc     |  63 +++-
- 9 files changed, 409 insertions(+), 3 deletions(-)
+ .../blink/renderer/platform/fonts/font.cc     |  31 ++
+ .../fonts/shaping/shape_result_bloberizer.cc  |   9 +
+ 10 files changed, 389 insertions(+)
 
 diff --git a/cc/trees/layer_tree_host.cc b/cc/trees/layer_tree_host.cc
-index 55295cc3f1e2f..20fa1030fb4e8 100644
+index c5427bb8c60dd..5f8e1378013ba 100644
 --- a/cc/trees/layer_tree_host.cc
 +++ b/cc/trees/layer_tree_host.cc
-@@ -481,6 +481,24 @@ bool LayerTreeHost::MainFrameUpdatesAreDeferred() const {
+@@ -546,6 +546,24 @@ bool LayerTreeHost::MainFrameUpdatesAreDeferred() const {
  bool LayerTreeHost::IsUsingLayerLists() const {
    return settings_.use_layer_lists;
  }
@@ -42,23 +43,23 @@ index 55295cc3f1e2f..20fa1030fb4e8 100644
 +  }
 +}
  
- void LayerTreeHost::CommitComplete(const CommitTimestamps& commit_timestamps) {
-   DCHECK(IsMainThread());
-@@ -1648,6 +1666,9 @@ bool LayerTreeHost::PaintContent(const LayerList& update_layer_list) {
+ void LayerTreeHost::CommitComplete(int source_frame_number,
+                                    const CommitTimestamps& commit_timestamps) {
+@@ -1820,6 +1838,9 @@ bool LayerTreeHost::PaintContent(const LayerList& update_layer_list) {
    for (const auto& layer : update_layer_list) {
-     did_paint_content |= layer->Update();
+     result |= layer->Update();
    }
 +
 +  StartTerminalRender();
 +
-   return did_paint_content;
+   return result;
  }
  
 diff --git a/cc/trees/layer_tree_host.h b/cc/trees/layer_tree_host.h
-index c26301594abc2..ed217c22359c4 100644
+index 925a5b0e8ff7a..064467c90f975 100644
 --- a/cc/trees/layer_tree_host.h
 +++ b/cc/trees/layer_tree_host.h
-@@ -167,6 +167,12 @@ class CC_EXPORT LayerTreeHost : public MutatorHostClient {
+@@ -187,6 +187,12 @@ class CC_EXPORT LayerTreeHost : public MutatorHostClient {
    // Returns the process global unique identifier for this LayerTreeHost.
    int GetId() const;
  
@@ -71,9 +72,9 @@ index c26301594abc2..ed217c22359c4 100644
    // The commit state for the frame being assembled by the compositor host.
    const CommitState* pending_commit_state() const {
      DCHECK(IsMainThread());
-@@ -1086,6 +1092,8 @@ class CC_EXPORT LayerTreeHost : public MutatorHostClient {
- 
-   bool syncing_deltas_for_test_ = false;
+@@ -1183,6 +1189,8 @@ class CC_EXPORT LayerTreeHost : public MutatorHostClient {
+   std::unique_ptr<PropertyTreeDelegate> owned_property_tree_delegate_;
+   raw_ptr<PropertyTreeDelegate> property_tree_delegate_;
  
 +  std::vector<std::shared_ptr<std::function<bool()>>> terminal_render_callbacks_;
 +
@@ -81,25 +82,25 @@ index c26301594abc2..ed217c22359c4 100644
  };
  
 diff --git a/content/browser/browser_interface_binders.cc b/content/browser/browser_interface_binders.cc
-index 6e62b36a76799..e07dcb983698b 100644
+index baa5bd1ca2699..c18b6da2680a1 100644
 --- a/content/browser/browser_interface_binders.cc
 +++ b/content/browser/browser_interface_binders.cc
-@@ -887,6 +887,10 @@ void PopulateFrameBinders(RenderFrameHostImpl* host, mojo::BinderMap* map) {
-       base::BindRepeating(&RenderFrameHostImpl::GetVirtualAuthenticatorManager,
-                           base::Unretained(host)));
+@@ -961,6 +961,10 @@ void PopulateBinderMapWithContext(
+       &BindRenderFrameHostImpl<
+           &RenderFrameHostImpl::CreateWebTransportConnector>);
  
 +  map->Add<carbonyl::mojom::CarbonylRenderService>(
-+      base::BindRepeating(&RenderFrameHostImpl::GetCarbonylRenderService,
-+                          base::Unretained(host)));
++      &BindRenderFrameHostImpl<
++          &RenderFrameHostImpl::GetCarbonylRenderService>);
 +
-   map->Add<device::mojom::DevicePostureProvider>(
-       base::BindRepeating(&BindDevicePostureProvider));
- 
+   // BrowserMainLoop::GetInstance() may be null on unit tests.
+   if (BrowserMainLoop::GetInstance()) {
+     // BrowserMainLoop, which owns MediaStreamManager, is alive for the lifetime
 diff --git a/content/browser/renderer_host/render_frame_host_impl.cc b/content/browser/renderer_host/render_frame_host_impl.cc
-index 8ba82589beb32..cc0ad634bcb4c 100644
+index 735febe0f136d..4309df84585bd 100644
 --- a/content/browser/renderer_host/render_frame_host_impl.cc
 +++ b/content/browser/renderer_host/render_frame_host_impl.cc
-@@ -10731,6 +10731,12 @@ void RenderFrameHostImpl::BindTrustTokenQueryAnswerer(
+@@ -15158,6 +15158,12 @@ void RenderFrameHostImpl::BindTrustTokenQueryAnswerer(
        std::move(receiver), ComputeTopFrameOrigin(GetLastCommittedOrigin()));
  }
  
@@ -113,10 +114,10 @@ index 8ba82589beb32..cc0ad634bcb4c 100644
      mojo::PendingReceiver<blink::mojom::AudioContextManager> receiver) {
    AudioContextManagerImpl::Create(this, std::move(receiver));
 diff --git a/content/browser/renderer_host/render_frame_host_impl.h b/content/browser/renderer_host/render_frame_host_impl.h
-index db16f07685acf..8c36cce0ec604 100644
+index 6450b5e6a03cf..3c45893ead017 100644
 --- a/content/browser/renderer_host/render_frame_host_impl.h
 +++ b/content/browser/renderer_host/render_frame_host_impl.h
-@@ -176,6 +176,8 @@
+@@ -221,6 +221,8 @@
  #include "media/mojo/mojom/remoting.mojom-forward.h"
  #endif
  
@@ -125,7 +126,7 @@ index db16f07685acf..8c36cce0ec604 100644
  namespace blink {
  class AssociatedInterfaceRegistry;
  class DocumentPolicy;
-@@ -1834,6 +1836,9 @@ class CONTENT_EXPORT RenderFrameHostImpl
+@@ -2088,6 +2090,9 @@ class CONTENT_EXPORT RenderFrameHostImpl
    // Set the `frame_` for sending messages to the renderer process.
    void SetMojomFrameRemote(mojo::PendingAssociatedRemote<mojom::Frame>);
  
@@ -135,29 +136,29 @@ index db16f07685acf..8c36cce0ec604 100644
    void GetAudioContextManager(
        mojo::PendingReceiver<blink::mojom::AudioContextManager> receiver);
  
-@@ -4720,6 +4725,8 @@ class CONTENT_EXPORT RenderFrameHostImpl
-   // The observers watching our state changed event.
-   base::ObserverList<RenderFrameHostObserver> observers_;
+@@ -5599,6 +5604,8 @@ class CONTENT_EXPORT RenderFrameHostImpl
+   std::unique_ptr<webauthn::RemoteValidation> webauthn_remote_rp_id_validation_;
+ #endif
  
 +  std::unique_ptr<carbonyl::CarbonylRenderServiceImpl> carbonyl_render_service_;
 +
-   // BrowserInterfaceBroker implementation through which this
-   // RenderFrameHostImpl exposes document-scoped Mojo services to the currently
-   // active document in the corresponding RenderFrame.
+   // Tracks the page that initiates Protected Audience auction. This is set
+   // when AdAuctionServiceImpl is constructed, which is when the first call to
+   // Protected Audience API takes place on the frame.
 diff --git a/content/renderer/render_frame_impl.cc b/content/renderer/render_frame_impl.cc
-index 9e09c5342699e..97b61ffb954be 100644
+index 5936c5eaa081a..a44d75c51ef1e 100644
 --- a/content/renderer/render_frame_impl.cc
 +++ b/content/renderer/render_frame_impl.cc
-@@ -232,6 +232,7 @@
- #include "third_party/blink/public/web/web_view.h"
- #include "third_party/blink/public/web/web_widget.h"
+@@ -245,6 +245,7 @@
  #include "third_party/blink/public/web/web_window_features.h"
+ #include "third_party/perfetto/include/perfetto/tracing/track.h"
+ #include "third_party/perfetto/include/perfetto/tracing/track_event_args.h"
 +#include "third_party/skia/include/core/SkPictureRecorder.h"
  #include "ui/accessibility/ax_tree_update.h"
  #include "ui/events/base_event_utils.h"
  #include "url/origin.h"
-@@ -255,6 +256,39 @@
- #include "content/renderer/java/gin_java_bridge_dispatcher.h"
+@@ -261,6 +262,39 @@
+ #include "mojo/public/cpp/bindings/self_owned_associated_receiver.h"
  #endif
  
 +// Carbonyl
@@ -196,10 +197,10 @@ index 9e09c5342699e..97b61ffb954be 100644
  using base::Time;
  using blink::ContextMenuData;
  using blink::WebContentDecryptionModule;
-@@ -1912,8 +1946,229 @@ RenderFrameImpl::~RenderFrameImpl() {
-   base::trace_event::TraceLog::GetInstance()->RemoveProcessLabel(routing_id_);
-   g_routing_id_frame_map.Get().erase(routing_id_);
-   agent_scheduling_group_.RemoveRoute(routing_id_);
+@@ -2000,8 +2034,229 @@ RenderFrameImpl::~RenderFrameImpl() {
+   tracing::TrackNameRecorder::GetInstance()->RemoveProcessLabel(
+       process_label_id_);
+   agent_scheduling_group_->RemoveFrameRoute(frame_token_);
 +
 +  if (auto& callback = *render_callback_.get()) {
 +    callback = nullptr;
@@ -426,19 +427,19 @@ index 9e09c5342699e..97b61ffb954be 100644
  void RenderFrameImpl::Initialize(blink::WebFrame* parent) {
    initialized_ = true;
    is_main_frame_ = !parent;
-@@ -1942,6 +2197,8 @@ void RenderFrameImpl::Initialize(blink::WebFrame* parent) {
+@@ -2026,6 +2281,8 @@ void RenderFrameImpl::Initialize(blink::WebFrame* parent) {
      factory.RegisterRemoteFactory(GetWebFrame()->GetLocalFrameToken(),
                                    GetBrowserInterfaceBroker());
    }
 +  
 +  browser_interface_broker_proxy_.GetInterface(std::move(carbonyl_render_service_receiver_));
  
-   frame_request_blocker_ = blink::WebFrameRequestBlocker::Create();
- 
-@@ -1954,6 +2211,37 @@ void RenderFrameImpl::Initialize(blink::WebFrame* parent) {
-   agent_scheduling_group_.AddFrameRoute(
-       routing_id_, this,
-       GetTaskRunner(blink::TaskType::kInternalNavigationAssociated));
+   // Bind this class to mojom::Frame and to the message router for legacy IPC.
+   // These must be called after |frame_| is set since binding requires a
+@@ -2036,6 +2293,37 @@ void RenderFrameImpl::Initialize(blink::WebFrame* parent) {
+   agent_scheduling_group_->AddFrameRoute(
+       frame_token_,
+       this, GetTaskRunner(blink::TaskType::kInternalNavigationAssociated));
 +
 +  if (base::CommandLine::ForCurrentProcess()->HasSwitch("carbonyl-b64-text")) {
 +    setenv("carbonyl_b64_text", "true", 1);
@@ -474,11 +475,11 @@ index 9e09c5342699e..97b61ffb954be 100644
  
  void RenderFrameImpl::GetInterface(
 diff --git a/content/renderer/render_frame_impl.h b/content/renderer/render_frame_impl.h
-index 3b558293121ce..f996b74bfae7e 100644
+index 1733f28e69b33..7ff0075c0d963 100644
 --- a/content/renderer/render_frame_impl.h
 +++ b/content/renderer/render_frame_impl.h
-@@ -118,6 +118,8 @@
- #include "content/common/pepper_plugin.mojom.h"
+@@ -132,6 +132,8 @@
+ #include "content/common/gin_java_bridge.mojom.h"
  #endif
  
 +#include "carbonyl/src/browser/carbonyl.mojom.h"
@@ -486,18 +487,18 @@ index 3b558293121ce..f996b74bfae7e 100644
  namespace blink {
  namespace scheduler {
  class WebAgentGroupScheduler;
-@@ -1446,6 +1448,8 @@ class CONTENT_EXPORT RenderFrameImpl
-   std::unique_ptr<blink::WebURLLoaderFactoryForTest>
-       web_url_loader_factory_override_for_test_;
+@@ -1514,6 +1516,8 @@ class CONTENT_EXPORT RenderFrameImpl
+   scoped_refptr<network::SharedURLLoaderFactory>
+       url_loader_factory_override_for_test_;
  
 +  std::shared_ptr<std::function<bool()>> render_callback_;
 +
    // When the browser asks the renderer to commit a navigation, it should always
    // result in a committed navigation reported via DidCommitProvisionalLoad().
    // This is important because DidCommitProvisionalLoad() is responsible for
-@@ -1522,6 +1526,10 @@ class CONTENT_EXPORT RenderFrameImpl
-   // false, but set to true by some tests.
-   bool send_content_state_immediately_ = false;
+@@ -1599,6 +1603,10 @@ class CONTENT_EXPORT RenderFrameImpl
+   // browser startup, e.g. the reload button.
+   bool is_initial_webui_ = false;
  
 +  mojo::Remote<carbonyl::mojom::CarbonylRenderService> carbonyl_render_service_;
 +  mojo::PendingReceiver<carbonyl::mojom::CarbonylRenderService> carbonyl_render_service_receiver_ =
@@ -507,10 +508,10 @@ index 3b558293121ce..f996b74bfae7e 100644
  };
  
 diff --git a/third_party/blink/public/web/web_frame_widget.h b/third_party/blink/public/web/web_frame_widget.h
-index 6264d513b398c..3988df585a159 100644
+index 11e9b422ee4ed..d55d67e56752c 100644
 --- a/third_party/blink/public/web/web_frame_widget.h
 +++ b/third_party/blink/public/web/web_frame_widget.h
-@@ -53,6 +53,10 @@ struct ApplyViewportChangesArgs;
+@@ -58,6 +58,10 @@ struct ApplyViewportChangesArgs;
  class LayerTreeHost;
  }  // namespace cc
  
@@ -521,7 +522,7 @@ index 6264d513b398c..3988df585a159 100644
  namespace gfx {
  class PointF;
  class RectF;
-@@ -227,6 +231,9 @@ class WebFrameWidget : public WebWidget {
+@@ -271,6 +275,9 @@ class WebFrameWidget : public WebWidget {
    // GPU benchmarking extension needs access to the LayerTreeHost
    friend class GpuBenchmarkingContext;
  
@@ -532,7 +533,7 @@ index 6264d513b398c..3988df585a159 100644
    // WebFrameWidgetImpl is the only concrete subclass that implements
    // WebFrameWidget, so that it is safe to downcast to WebFrameWidgetImpl.
 diff --git a/third_party/blink/renderer/platform/fonts/font.cc b/third_party/blink/renderer/platform/fonts/font.cc
-index 089a11b156ade..dfdc79eacce3b 100644
+index 8bd0b172f5be7..420cf7860556b 100644
 --- a/third_party/blink/renderer/platform/fonts/font.cc
 +++ b/third_party/blink/renderer/platform/fonts/font.cc
 @@ -24,6 +24,8 @@
@@ -540,72 +541,22 @@ index 089a11b156ade..dfdc79eacce3b 100644
  #include "third_party/blink/renderer/platform/fonts/font.h"
  
 +#include "base/base64.h"
-+
- #include "cc/paint/paint_canvas.h"
++#include "cc/paint/paint_canvas.h"
  #include "cc/paint/paint_flags.h"
  #include "third_party/blink/renderer/platform/fonts/character_range.h"
-@@ -149,11 +151,17 @@ bool Font::operator==(const Font& other) const {
+ #include "third_party/blink/renderer/platform/fonts/font_cache.h"
+@@ -45,6 +47,10 @@
  
- namespace {
+ namespace blink {
  
++// Carbonyl: gate Blink text rendering to emit base64-encoded raw text instead
++// of HarfBuzz-shaped glyphs, so the terminal can decode and place the text.
 +static const bool carbonyl_b64_text = true;
 +
- void DrawBlobs(cc::PaintCanvas* canvas,
-                const cc::PaintFlags& flags,
-                const ShapeResultBloberizer::BlobBuffer& blobs,
-                const gfx::PointF& point,
--               cc::NodeId node_id = cc::kInvalidNodeId) {
-+               cc::NodeId node_id = cc::kInvalidNodeId) {  
-+  if (carbonyl_b64_text) {
-+    return;
-+  }
-+
-   for (const auto& blob_info : blobs) {
-     DCHECK(blob_info.blob);
-     cc::PaintCanvasAutoRestore auto_restore(canvas, false);
-@@ -198,8 +206,7 @@ void DrawBlobs(cc::PaintCanvas* canvas,
-       }
-     }
-     if (node_id != cc::kInvalidNodeId) {
--      canvas->drawTextBlob(blob_info.blob, point.x(), point.y(), node_id,
--                           flags);
-+      canvas->drawTextBlob(blob_info.blob, point.x(), point.y(), node_id, flags);
-     } else {
-       canvas->drawTextBlob(blob_info.blob, point.x(), point.y(), flags);
-     }
-@@ -230,6 +237,31 @@ void Font::DrawText(cc::PaintCanvas* canvas,
-   if (ShouldSkipDrawing())
-     return;
+ namespace {
  
-+  if (carbonyl_b64_text) {
-+    auto string = StringView(
-+      run_info.run.ToStringView(),
-+      run_info.from,
-+      run_info.to - run_info.from
-+    ).ToString().Utf8();
-+    auto base64 = base::Base64Encode(base::as_bytes(base::make_span(string)));
-+
-+    // Bypass HarfBuzz text shaping for the Carbonyl Skia back-end
-+    auto blob = SkTextBlob::MakeFromString(
-+      base64.c_str(),
-+      PrimaryFont()->
-+        PlatformData().
-+        CreateSkFont(false, &font_description_)
-+    );
-+
-+    if (node_id != cc::kInvalidNodeId) {
-+      canvas->drawTextBlob(blob, point.x(), point.y(), node_id, flags);
-+    } else {
-+      canvas->drawTextBlob(blob, point.x(), point.y(), flags);
-+    }
-+
-+    return;
-+  }
-+
-   CachingWordShaper word_shaper(*this);
-   ShapeResultBuffer buffer;
-   word_shaper.FillResultBuffer(run_info, &buffer);
-@@ -253,6 +285,31 @@ void Font::DrawText(cc::PaintCanvas* canvas,
+ FontFallbackList* GetOrCreateFontFallbackList(
+@@ -100,6 +106,31 @@ void Font::DrawText(cc::PaintCanvas* canvas,
    if (ShouldSkipDrawing())
      return;
  
@@ -634,6 +585,31 @@ index 089a11b156ade..dfdc79eacce3b 100644
 +    return;
 +  }
 +
-   ShapeResultBloberizer::FillGlyphsNG bloberizer(
-       GetFontDescription(), device_scale_factor > 1.0f, text_info.text,
-       text_info.from, text_info.to, text_info.shape_result,
+   // For performance avoid stack initialization on this large object.
+   STACK_UNINITIALIZED ShapeResultBloberizer::FillGlyphsNG bloberizer(
+       GetFontDescription(), text_info.text, text_info.from, text_info.to,
+diff --git a/third_party/blink/renderer/platform/fonts/shaping/shape_result_bloberizer.cc b/third_party/blink/renderer/platform/fonts/shaping/shape_result_bloberizer.cc
+index cb14cacdec11d..ed517dabedd66 100644
+--- a/third_party/blink/renderer/platform/fonts/shaping/shape_result_bloberizer.cc
++++ b/third_party/blink/renderer/platform/fonts/shaping/shape_result_bloberizer.cc
+@@ -608,11 +608,20 @@ float ShapeResultBloberizer::FillFastHorizontalGlyphs(const ShapeResult* result,
+                               static_cast<void*>(this));
+ }
+ 
++// Carbonyl: when text mode is on, Font::DrawText already emits base64-encoded
++// raw text via its own path. Bloberizer-based callers (DrawEmphasisMarks,
++// plain_text_painter) would re-emit shaped glyphs on top, so short-circuit.
++static const bool carbonyl_b64_text = true;
++
+ void DrawTextBlobs(const ShapeResultBloberizer::BlobBuffer& blobs,
+                    cc::PaintCanvas& canvas,
+                    const gfx::PointF& point,
+                    const cc::PaintFlags& flags,
+                    cc::NodeId node_id) {
++  if (carbonyl_b64_text) {
++    return;
++  }
++
+   for (const auto& blob_info : blobs) {
+     DCHECK(blob_info.blob);
+     cc::PaintCanvasAutoRestore auto_restore(&canvas, false);
