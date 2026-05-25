@@ -6,9 +6,9 @@ source "$CARBONYL_ROOT/scripts/env.sh"
 
 cd "$CHROMIUM_SRC"
 
-chromium_upstream="92da8189788b1b373cbd3348f73d695dfdc521b6"
-skia_upstream="486deb23bc2a4d3d09c66fef52c2ad64d8b4f761"
-webrtc_upstream="727080cbacd58a2f303ed8a03f0264fe1493e47a"
+chromium_upstream="d096af1c9e98c45c3596e59620622b1a049bfecb"
+skia_upstream="a2888b27a98e4ff30085d4d2dba8a1a99baf6dfb"
+webrtc_upstream="9a7f650bcd14f241d20f88f4e1ea3b7300de72ac"
 
 if [[ "$1" == "apply" ]]; then
     echo "Stashing Chromium changes.."
