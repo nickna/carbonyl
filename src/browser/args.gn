@@ -35,6 +35,8 @@ rtc_use_x11_extensions = false
 # use_system_minigbm = false
 
 # Disable unused features
+enable_extensions = false
+enable_background_mode = false
 enable_pdf = false
 enable_nacl = false
 enable_ppapi = false
