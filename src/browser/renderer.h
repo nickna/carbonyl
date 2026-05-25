@@ -5,6 +5,7 @@
 #include <functional>
 
 #include "base/functional/callback.h"
+#include "base/memory/raw_ptr_exclusion.h"
 #include "carbonyl/src/browser/export.h"
 #include "ui/gfx/geometry/rect_f.h"
 
@@ -68,7 +69,8 @@ public:
 private:
     Renderer(struct carbonyl_renderer* ptr);
 
-    struct carbonyl_renderer* ptr_;
+    // FFI handle into Rust-owned memory; raw_ptr<> cannot manage it.
+    RAW_PTR_EXCLUSION struct carbonyl_renderer* ptr_;
 };
 
 }

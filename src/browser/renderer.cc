@@ -65,7 +65,7 @@ void carbonyl_renderer_draw_bitmap(
 namespace carbonyl {
 
 namespace {
-    static std::unique_ptr<Renderer> globalInstance;
+    constinit Renderer* g_renderer_instance = nullptr;
 }
 
 Renderer::Renderer(struct carbonyl_renderer* ptr): ptr_(ptr) {}
@@ -80,13 +80,11 @@ void Renderer::Main() {
 }
 
 Renderer* Renderer::GetCurrent() {
-    if (!globalInstance) {
-        globalInstance = std::unique_ptr<Renderer>(
-            new Renderer(carbonyl_renderer_create())
-        );
+    if (!g_renderer_instance) {
+        g_renderer_instance = new Renderer(carbonyl_renderer_create());
     }
 
-    return globalInstance.get();
+    return g_renderer_instance;
 }
 
 void Renderer::StartRenderer() {
@@ -127,20 +125,23 @@ void Renderer::SetTitle(const std::string& title) {
 }
 
 void Renderer::DrawText(const std::vector<Text>& text) {
-    struct carbonyl_renderer_text data[text.size()];
+    std::vector<carbonyl_renderer_text> data;
+    data.reserve(text.size());
 
-    for (size_t i = 0; i < text.size(); i++) {
-        data[i].text = text[i].text.c_str();
-        data[i].color.r = SkColorGetR(text[i].color);
-        data[i].color.g = SkColorGetG(text[i].color);
-        data[i].color.b = SkColorGetB(text[i].color);
-        data[i].rect.origin.x = text[i].rect.x();
-        data[i].rect.origin.y = text[i].rect.y();
-        data[i].rect.size.width = std::ceil(text[i].rect.width());
-        data[i].rect.size.height = std::ceil(text[i].rect.height());
+    for (const auto& t : text) {
+        carbonyl_renderer_text entry;
+        entry.text = t.text.c_str();
+        entry.color.r = SkColorGetR(t.color);
+        entry.color.g = SkColorGetG(t.color);
+        entry.color.b = SkColorGetB(t.color);
+        entry.rect.origin.x = t.rect.x();
+        entry.rect.origin.y = t.rect.y();
+        entry.rect.size.width = std::ceil(t.rect.width());
+        entry.rect.size.height = std::ceil(t.rect.height());
+        data.push_back(entry);
     }
 
-    carbonyl_renderer_draw_text(ptr_, data, text.size());
+    carbonyl_renderer_draw_text(ptr_, data.data(), data.size());
 }
 
 void Renderer::DrawBitmap(

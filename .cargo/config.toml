@@ -1,2 +1,9 @@
 [build]
 target-dir = "build"
+
+# Use Chromium's bundled clang as the linker so libcarbonyl.so's symbol-version
+# metadata matches the libc in chromium/src/build/linux/debian_*-sysroot rather
+# than the host system's. ld.lld in the chromium build will otherwise reject
+# libcarbonyl.so with "version definition index N out of bounds" errors.
+[target.x86_64-unknown-linux-gnu]
+linker = "chromium/src/third_party/llvm-build/Release+Asserts/bin/clang"

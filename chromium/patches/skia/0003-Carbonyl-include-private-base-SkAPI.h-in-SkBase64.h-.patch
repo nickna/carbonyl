@@ -1,0 +1,28 @@
+From d251ed5f363748678c20213409b75477d0317d2a Mon Sep 17 00:00:00 2001
+From: Nick Nassiri <nick@knnlabs.com>
+Date: Mon, 25 May 2026 11:02:33 -0700
+Subject: [PATCH 3/3] Carbonyl: include private/base/SkAPI.h in SkBase64.h for
+ M148
+
+SkBase64 moved from include/utils/ to src/base/ in M148-era Skia and
+no longer transitively pulls in SkTypes.h. Add the explicit SkAPI.h
+include so the SK_API decorator the carbonyl patch adds is defined.
+
+Co-Authored-By: Claude Opus 4.7 (1M context) <noreply@anthropic.com>
+---
+ src/base/SkBase64.h | 2 ++
+ 1 file changed, 2 insertions(+)
+
+diff --git a/src/base/SkBase64.h b/src/base/SkBase64.h
+index e5f5f6fcd7..13cfe138cf 100644
+--- a/src/base/SkBase64.h
++++ b/src/base/SkBase64.h
+@@ -10,6 +10,8 @@
+ 
+ #include <cstddef>
+ 
++#include "include/private/base/SkAPI.h"
++
+ struct SK_API SkBase64 {
+ public:
+     enum Error {

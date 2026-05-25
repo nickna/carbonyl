@@ -1,7 +1,7 @@
 From e631b7ec72f177800fe9abe8dadfca8ed93e2eac Mon Sep 17 00:00:00 2001
 From: Fathy Boundjadj <hey@fathy.fr>
 Date: Thu, 9 Feb 2023 03:38:05 +0100
-Subject: [PATCH 2/2] Export some private APIs
+Subject: [PATCH 2/3] Export some private APIs
 
 Temporary until TextCaptureDevice moves here
 ---
