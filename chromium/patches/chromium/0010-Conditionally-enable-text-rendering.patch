@@ -1,7 +1,7 @@
 From 0482a53485e306503b11aa5aa12e8a8798f199ca Mon Sep 17 00:00:00 2001
 From: Fathy Boundjadj <hey@fathy.fr>
 Date: Sun, 12 Feb 2023 00:55:33 +0100
-Subject: [PATCH 10/15] Conditionally enable text rendering
+Subject: [PATCH 10/16] Conditionally enable text rendering
 
 ---
  content/renderer/render_frame_impl.cc         |  3 +-

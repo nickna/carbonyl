@@ -1,7 +1,7 @@
 From 87ce643b56029bceb1f3b95b16b93c61618b9cb9 Mon Sep 17 00:00:00 2001
 From: Fathy Boundjadj <hey@fathy.fr>
 Date: Mon, 13 Feb 2023 17:13:38 +0100
-Subject: [PATCH 14/15] Move Skia text rendering control to bridge
+Subject: [PATCH 14/16] Move Skia text rendering control to bridge
 
 ---
  content/renderer/render_frame_impl.cc | 5 -----

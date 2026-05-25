@@ -1,7 +1,7 @@
 From 4a3def269eed22ada69be13ec385112a721b6e63 Mon Sep 17 00:00:00 2001
 From: Nick Nassiri <nick@knnlabs.com>
 Date: Mon, 25 May 2026 11:02:06 -0700
-Subject: [PATCH 15/15] Carbonyl: M148 build adaptations
+Subject: [PATCH 15/16] Carbonyl: M148 build adaptations
 
 Final round of fixes needed to make the carbonyl patch series compile
 and link against Chromium M148 after the bulk rebase in patches 1-14.

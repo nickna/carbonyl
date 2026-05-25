@@ -1,0 +1,120 @@
+From f161c3350a525032f0b6bc9f7c98bd0a94ccaebe Mon Sep 17 00:00:00 2001
+From: Nick Nassiri <nick@knnlabs.com>
+Date: Mon, 25 May 2026 11:20:47 -0700
+Subject: [PATCH 16/16] Carbonyl: wire WebContentsObserver and input listener
+ for M148
+
+Two small follow-ups that make the browser actually interactive on
+M148:
+
+1. HeadlessWebContentsImpl now calls WebContentsObserver::Observe(
+   web_contents_.get()) at the end of its constructor. Patch 0009
+   added TitleWasSet / DidFinishNavigation / RenderViewReady as
+   overrides but in M148 nothing in the parent class attaches the
+   observer automatically, so the URL bar stayed at "about:blank"
+   and the address-bar/title chrome never updated.
+
+2. The terminal input listener (SIGWINCH handler + the thread that
+   calls carbonyl::Renderer::Listen) used to live inside the patch-
+   0009 RunOnStartCallback() method that was invoked from the
+   M111 HeadlessBrowserMainParts startup hook. That hook is gone in
+   M148; the new entry point is HeadlessBrowserImpl::PreMainMessage-
+   LoopRun. The listener body is extracted into a small helper
+   StartCarbonylInputListener() and PreMainMessageLoopRun calls it
+   *after* on_start_callback_ has run HeadlessShell::OnBrowserStart
+   (which in turn calls Renderer::StartRenderer()). Calling it
+   earlier wedges the renderer's terminal I/O and the page never
+   paints.
+
+With both in place: pages load and render, the address bar tracks
+navigations, keyboard input and mouse clicks reach the browser.
+
+Co-Authored-By: Claude Opus 4.7 (1M context) <noreply@anthropic.com>
+---
+ headless/lib/browser/headless_browser_impl.cc | 20 ++++++++++---------
+ headless/lib/browser/headless_browser_impl.h  |  8 ++++----
+ .../lib/browser/headless_web_contents_impl.cc |  5 +++++
+ third_party/skia                              |  2 +-
+ 4 files changed, 21 insertions(+), 14 deletions(-)
+
+diff --git a/headless/lib/browser/headless_browser_impl.cc b/headless/lib/browser/headless_browser_impl.cc
+index 1ef139e3a9219..de0a0e4c969fa 100644
+--- a/headless/lib/browser/headless_browser_impl.cc
++++ b/headless/lib/browser/headless_browser_impl.cc
+@@ -515,15 +515,11 @@ void HeadlessBrowserImpl::OnMouseMoveInput(unsigned int x, unsigned int y) {
+   }
+ }
+ 
+-void HeadlessBrowserImpl::RunOnStartCallback() {
+-  // We don't support the tethering domain on this agent host.
+-  agent_host_ = content::DevToolsAgentHost::CreateForBrowser(
+-      nullptr, content::DevToolsAgentHost::CreateServerSocketCallback());
+-
+-  // PlatformStart was a M111-only platform delegate hook that's been folded
+-  // into HeadlessPlatformDelegate::Start() in M148.
+-  std::move(on_start_callback_).Run(this);
+-
++// Carbonyl: PreMainMessageLoopRun is the M148 hook that wires together the
++// DevTools agent and platform delegate. We extend it to also start the
++// SIGWINCH handler and the carbonyl input-listener thread that turns
++// terminal key/mouse events into Chromium navigation/input calls.
++void HeadlessBrowserImpl::StartCarbonylInputListener() {
+   signal(SIGWINCH, [](int signal) {
+     if (carbonyl::browser) {
+       carbonyl::browser->Resize();
+@@ -698,7 +694,13 @@ void HeadlessBrowserImpl::PreMainMessageLoopRun() {
+ 
+   platform_delegate_->Start();
+ 
++  // Carbonyl: run on_start_callback first so HeadlessShell::OnBrowserStart
++  // gets a chance to construct the browser context and call
++  // Renderer::StartRenderer() before the input thread starts driving the
++  // renderer's terminal I/O.
+   std::move(on_start_callback_).Run(this);
++
++  StartCarbonylInputListener();
+ }
+ 
+ void HeadlessBrowserImpl::WillRunMainMessageLoop(base::RunLoop& run_loop) {
+diff --git a/headless/lib/browser/headless_browser_impl.h b/headless/lib/browser/headless_browser_impl.h
+index 42220df123d31..bf637e85e83e7 100644
+--- a/headless/lib/browser/headless_browser_impl.h
++++ b/headless/lib/browser/headless_browser_impl.h
+@@ -113,10 +113,10 @@ class HEADLESS_EXPORT HeadlessBrowserImpl : public HeadlessBrowser {
+   policy::PolicyService* GetPolicyService();
+ #endif
+ 
+-  // Carbonyl: bootstrap entry point invoked after the browser main loop is
+-  // ready; spins up the DevTools agent and the terminal-input listener
+-  // thread that drives the carbonyl-side runtime via the BrowserDelegate FFI.
+-  void RunOnStartCallback();
++  // Carbonyl: spin up the SIGWINCH handler and the terminal-input listener
++  // thread that turns terminal key/mouse events into Chromium navigation
++  // and input calls. Called from PreMainMessageLoopRun.
++  void StartCarbonylInputListener();
+ 
+   // Carbonyl: terminal-input handlers dispatched from the Rust core's
+   // input::listen() thread via the BrowserDelegate FFI.
+diff --git a/headless/lib/browser/headless_web_contents_impl.cc b/headless/lib/browser/headless_web_contents_impl.cc
+index 4e723b4417cac..2e338a161f064 100644
+--- a/headless/lib/browser/headless_web_contents_impl.cc
++++ b/headless/lib/browser/headless_web_contents_impl.cc
+@@ -463,6 +463,11 @@ HeadlessWebContentsImpl::HeadlessWebContentsImpl(
+   }
+ 
+   web_contents_->SetDelegate(web_contents_delegate_.get());
++
++  // Carbonyl: attach as a WebContentsObserver so TitleWasSet,
++  // DidFinishNavigation and RenderViewReady fire and propagate into the
++  // terminal UI (address bar, title, nav buttons).
++  WebContentsObserver::Observe(web_contents_.get());
+ }
+ 
+ HeadlessWebContentsImpl::~HeadlessWebContentsImpl() {
+diff --git a/third_party/skia b/third_party/skia
+index e631b7ec72f17..d251ed5f36374 160000
+--- a/third_party/skia
++++ b/third_party/skia
+@@ -1 +1 @@
+-Subproject commit e631b7ec72f177800fe9abe8dadfca8ed93e2eac
++Subproject commit d251ed5f363748678c20213409b75477d0317d2a
