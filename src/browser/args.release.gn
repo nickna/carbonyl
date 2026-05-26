@@ -1,0 +1,24 @@
+import("//carbonyl/src/browser/args.gn")
+
+# Release build settings. Layered on top of args.gn (the shared base
+# imported above). Use this from chromium/src/out/Release/args.gn:
+#
+#     import("//carbonyl/src/browser/args.release.gn")
+#
+# Notes:
+#   * is_component_build = true is kept to match the debug build's
+#     dynamic-library layout. A static (component=false) release build
+#     produced a working headless_shell binary but crashed in libc's
+#     TLS init before main() ran — likely a TLS-section conflict
+#     between the embedded carbonyl bridge and the host glibc, since
+#     libcarbonyl.so is built against the chromium sysroot's libc
+#     while the rest of the binary loads against the host's.
+#   * symbol_level = 0 / blink_symbol_level = 0 produce binaries
+#     without debug info, suitable for distribution.
+#   * dcheck_always_on = false drops the extra runtime checks Chromium
+#     leaves on in non-release builds.
+is_debug = false
+is_component_build = true
+symbol_level = 0
+blink_symbol_level = 0
+dcheck_always_on = false

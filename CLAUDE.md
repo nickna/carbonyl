@@ -31,6 +31,14 @@ cargo build --release                          # release; output: build/release/
 ./scripts/build.sh Default
 # Skip the cargo step: CARBONYL_SKIP_CARGO_BUILD=1 ./scripts/build.sh Default
 
+# Release build (smaller, optimized; ~1.5h from scratch on a 12-core machine).
+# Keep `is_component_build = true` — a static-link release build crashes in
+# libc's TLS init before main().
+mkdir -p chromium/src/out/Release
+echo 'import("//carbonyl/src/browser/args.release.gn")' > chromium/src/out/Release/args.gn
+./scripts/gn.sh gen out/Release
+./scripts/build.sh Release
+
 # Run it
 ./scripts/run.sh Default https://wikipedia.org
 
